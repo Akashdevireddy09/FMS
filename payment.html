@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>AeroNexus — Payment</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     MEMBER 8 — Payment Module
+     Reads:  DB.bookingDraft
+     Simulates payment (no real gateway)
+     On success: writes to DB.bookings
+                 → shows booking success
+══════════════════════════════════════ -->
+
+<div class="page-wrap">
+
+  <nav class="navbar">
+    <a class="brand" href="login.html">✈ AeroNexus</a>
+    <div class="nav-links">
+      <a href="user-dashboard.html">Dashboard</a>
+      <a href="flight-search.html">Search Flights</a>
+      <a href="my-bookings.html">My Bookings</a>
+      <a href="profile.html">Profile</a>
+    </div>
+    <div class="nav-user">
+      <span id="nav-username"></span> &nbsp;|&nbsp;
+      <button onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+
+  <div class="main">
+
+    <span class="back-link" onclick="history.back()">← Back to Confirmation</span>
+
+    <h1 class="page-title">Payment</h1>
+    <p class="page-subtitle">Complete your payment to confirm the booking.</p>
+
+    <!-- Alert (shown above form — no JS alert boxes) -->
+    <div id="pay-alert"></div>
+
+    <!-- Amount summary bar -->
+    <div style="background:#1a3a5c; color:#fff; padding:14px 20px; border-radius:6px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <span>Total Amount Payable</span>
+      <span style="font-size:1.4rem; font-weight:bold;" id="pay-amount">₹0</span>
+    </div>
+
+    <!-- Payment form -->
+    <div class="card" id="payment-form-card">
+      <div class="card-title">Payment Details</div>
+
+      <div class="form-group">
+        <label class="form-label">Payment Method <span class="required">*</span></label>
+        <select id="pay-method" class="form-select" onchange="togglePaymentFields()">
+          <option value="">Select Method</option>
+          <option value="card">Credit / Debit Card</option>
+          <option value="upi">UPI</option>
+          <option value="netbanking">Net Banking</option>
+          <option value="wallet">Wallet</option>
+        </select>
+        <div class="field-error" id="err-pay-method"></div>
+      </div>
+
+      <!-- Card fields -->
+      <div id="card-fields" style="display:none;">
+        <div class="section-title">Card Details</div>
+        <div class="form-group">
+          <label class="form-label">Card Number <span class="required">*</span></label>
+          <input id="card-num" class="form-input" placeholder="1234 5678 9012 3456"
+                 maxlength="19" oninput="formatCard(this)" title="16-digit card number"/>
+          <div class="field-error" id="err-card-num"></div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Expiry (MM/YY) <span class="required">*</span></label>
+            <input id="card-exp" class="form-input" placeholder="MM/YY"
+                   maxlength="5" oninput="formatExpiry(this)" title="Card expiry date"/>
+            <div class="field-error" id="err-card-exp"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">CVV <span class="required">*</span></label>
+            <input id="card-cvv" class="form-input" type="password"
+                   maxlength="3" placeholder="***" title="3-digit CVV"/>
+            <div class="field-error" id="err-card-cvv"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Name on Card <span class="required">*</span></label>
+          <input id="card-name" class="form-input" placeholder="As printed on card"
+                 title="Cardholder name"/>
+          <div class="field-error" id="err-card-name"></div>
+        </div>
+      </div>
+
+      <!-- UPI fields -->
+      <div id="upi-fields" style="display:none;">
+        <div class="section-title">UPI Details</div>
+        <div class="form-group">
+          <label class="form-label">UPI ID <span class="required">*</span></label>
+          <input id="upi-id" class="form-input" placeholder="yourname@upi"
+                 title="Your UPI ID e.g. name@okicici"/>
+          <div class="field-error" id="err-upi-id"></div>
+        </div>
+      </div>
+
+      <!-- Net Banking fields -->
+      <div id="netbanking-fields" style="display:none;">
+        <div class="section-title">Net Banking</div>
+        <div class="form-group">
+          <label class="form-label">Select Bank <span class="required">*</span></label>
+          <select id="bank-name" class="form-select" title="Choose your bank">
+            <option value="">Select Bank</option>
+            <option>SBI</option><option>HDFC</option><option>ICICI</option>
+            <option>Axis</option><option>Kotak</option><option>PNB</option>
+          </select>
+          <div class="field-error" id="err-bank-name"></div>
+        </div>
+      </div>
+
+      <!-- Wallet fields -->
+      <div id="wallet-fields" style="display:none;">
+        <div class="section-title">Wallet</div>
+        <div class="form-group">
+          <label class="form-label">Select Wallet <span class="required">*</span></label>
+          <select id="wallet-name" class="form-select">
+            <option value="">Select Wallet</option>
+            <option>Paytm</option><option>PhonePe</option>
+            <option>Amazon Pay</option><option>Mobikwik</option>
+          </select>
+          <div class="field-error" id="err-wallet-name"></div>
+        </div>
+      </div>
+
+      <div class="btn-group" style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="processPayment()">
+          Pay &#8377;<span id="pay-btn-amt">0</span>
+        </button>
+        <button class="btn btn-secondary" onclick="history.back()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Success section (hidden until payment done) -->
+    <div id="payment-success" class="card" style="display:none; text-align:center;">
+      <div style="font-size:3rem; margin-bottom:12px;">✅</div>
+      <h2 style="color:#27ae60;">Booking Confirmed!</h2>
+      <p style="color:#555; margin:8px 0 16px;">Your payment was successful and your seat is booked.</p>
+      <div id="success-booking-id" class="alert alert-success" style="text-align:left;"></div>
+      <div class="btn-group" style="justify-content:center; margin-top:8px;">
+        <a href="my-bookings.html" class="btn btn-primary">View My Bookings</a>
+        <a href="flight-search.html" class="btn btn-secondary">Book Another Flight</a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">AeroNexus Flight Management System &copy; 2025</div>
+</div>
+
+<script src="../js/data.js"></script>
+<script>
+
+function guardCustomer() {
+  if (!DB.session || DB.session.role !== 'customer') {
+    window.location.href = 'login.html'; return false;
+  }
+  return true;
+}
+function logout() { DB.session = null; window.location.href = 'login.html'; }
+
+function showAlert(type, msg) {
+  const el = document.getElementById('pay-alert');
+  el.innerHTML = msg ? `<div class="alert alert-${type}">${msg}</div>` : '';
+}
+function setErr(id, msg) { const el = document.getElementById(id); if (el) el.textContent = msg; }
+function v(id) { return (document.getElementById(id) || {}).value || ''; }
+
+/* ── Card number formatter ── */
+function formatCard(el) {
+  let val = el.value.replace(/\D/g, '').slice(0, 16);
+  el.value = val.match(/.{1,4}/g)?.join(' ') || val;
+}
+
+/* ── Expiry formatter ── */
+function formatExpiry(el) {
+  let val = el.value.replace(/\D/g, '').slice(0, 4);
+  if (val.length >= 2) val = val.slice(0,2) + '/' + val.slice(2);
+  el.value = val;
+}
+
+/* ── Show/hide payment fields by method ── */
+function togglePaymentFields() {
+  ['card-fields','upi-fields','netbanking-fields','wallet-fields']
+    .forEach(id => document.getElementById(id).style.display = 'none');
+  const method = v('pay-method');
+  const map = { card:'card-fields', upi:'upi-fields', netbanking:'netbanking-fields', wallet:'wallet-fields' };
+  if (map[method]) document.getElementById(map[method]).style.display = 'block';
+}
+
+/* ── Validate by method ── */
+function validatePayment(method) {
+  let ok = true;
+  if (!method) { setErr('err-pay-method','Please select a payment method.'); ok = false; return ok; }
+
+  if (method === 'card') {
+    const num  = v('card-num').replace(/\s/g,'');
+    const exp  = v('card-exp');
+    const cvv  = v('card-cvv');
+    const name = v('card-name').trim();
+    if (num.length !== 16) { setErr('err-card-num','Enter a valid 16-digit card number.'); ok = false; }
+    if (!/^\d{2}\/\d{2}$/.test(exp)) { setErr('err-card-exp','Enter expiry as MM/YY.'); ok = false; }
+    if (cvv.length !== 3) { setErr('err-card-cvv','Enter 3-digit CVV.'); ok = false; }
+    if (!name) { setErr('err-card-name','Name on card is required.'); ok = false; }
+  }
+  if (method === 'upi') {
+    const uid = v('upi-id').trim();
+    if (!/^[\w.\-]+@[\w]+$/.test(uid)) { setErr('err-upi-id','Enter a valid UPI ID (e.g. name@okicici).'); ok = false; }
+  }
+  if (method === 'netbanking') {
+    if (!v('bank-name')) { setErr('err-bank-name','Please select your bank.'); ok = false; }
+  }
+  if (method === 'wallet') {
+    if (!v('wallet-name')) { setErr('err-wallet-name','Please select your wallet.'); ok = false; }
+  }
+  return ok;
+}
+
+/* ── Clear all errors ── */
+function clearErrors() {
+  ['err-pay-method','err-card-num','err-card-exp','err-card-cvv','err-card-name','err-upi-id','err-bank-name','err-wallet-name']
+    .forEach(id => setErr(id,''));
+}
+
+/* ── Process payment & write booking ── */
+function processPayment() {
+  clearErrors();
+  showAlert('','');
+  const method = v('pay-method');
+  if (!validatePayment(method)) return;
+
+  const draft    = DB.bookingDraft;
+  const schedule = DB.schedules.find(s => s.scheduleId === draft.scheduleId);
+
+  if (!schedule) { showAlert('error','Schedule not found. Please try again.'); return; }
+
+  /* Deduct seats from schedule */
+  if (draft.seatClass === 'Economy')   schedule.bookedEconomy   += draft.noOfSeats;
+  if (draft.seatClass === 'Business')  schedule.bookedBusiness  += draft.noOfSeats;
+  if (draft.seatClass === 'Executive') schedule.bookedExecutive += draft.noOfSeats;
+
+  /* Write booking record */
+  const newBookingId = DB.nextBookingId++;
+  DB.bookings.push({
+    bookingId:     newBookingId,
+    flightId:      draft.flightId,
+    scheduleId:    draft.scheduleId,
+    userId:        DB.session.userId,
+    noOfSeats:     draft.noOfSeats,
+    seatCategory:  draft.seatClass,
+    dateOfTravel:  draft.dateOfTravel,
+    bookingStatus: 'Booked',
+    bookingAmount: draft.totalAmount,
+    paymentMethod: method
+  });
+
+  /* Clear draft */
+  DB.bookingDraft  = null;
+  DB.selectedFlight = null;
+
+  /* Show success */
+  document.getElementById('payment-form-card').style.display = 'none';
+  document.getElementById('payment-success').style.display   = 'block';
+  document.getElementById('success-booking-id').textContent  =
+    `Booking ID: #${newBookingId}  |  Amount Paid: ₹${draft.totalAmount}  |  Seats: ${draft.noOfSeats} × ${draft.seatClass}`;
+}
+
+/* ── Init ── */
+function init() {
+  if (!guardCustomer()) return;
+
+  const user  = DB.users.find(u => u.userId === DB.session.userId);
+  if (user) document.getElementById('nav-username').textContent = user.userName;
+
+  const draft = DB.bookingDraft;
+  if (!draft) {
+    showAlert('error','No booking in progress. Please start from flight search.');
+    return;
+  }
+
+  document.getElementById('pay-amount').textContent   = draft.totalAmount;
+  document.getElementById('pay-btn-amt').textContent  = draft.totalAmount;
+}
+
+init();
+</script>
+</body>
+</html>

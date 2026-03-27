@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>AeroNexus — My Bookings</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     MEMBER 9 — Cancellation & Refund Module
+     Also handles: My Bookings list page
+     Shows:  all bookings, cancel option,
+             refund calculation per carrier
+══════════════════════════════════════ -->
+
+<div class="page-wrap">
+
+  <nav class="navbar">
+    <a class="brand" href="login.html">✈ AeroNexus</a>
+    <div class="nav-links">
+      <a href="user-dashboard.html">Dashboard</a>
+      <a href="flight-search.html">Search Flights</a>
+      <a href="my-bookings.html">My Bookings</a>
+      <a href="profile.html">Profile</a>
+    </div>
+    <div class="nav-user">
+      <span id="nav-username"></span> &nbsp;|&nbsp;
+      <button onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+
+  <div class="main">
+
+    <h1 class="page-title">My Bookings</h1>
+    <p class="page-subtitle">View all your bookings and manage cancellations.</p>
+
+    <!-- Alert above content (no JS alert boxes) -->
+    <div id="bookings-alert"></div>
+
+    <!-- Filter -->
+    <div style="display:flex; gap:12px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+      <label style="font-size:13px;">Filter:</label>
+      <select id="filter-status" class="form-select" style="width:auto;"
+              onchange="renderBookings()">
+        <option value="">All Bookings</option>
+        <option value="Booked">Booked</option>
+        <option value="Cancelled">Cancelled</option>
+        <option value="Travel Completed">Travel Completed</option>
+      </select>
+    </div>
+
+    <!-- Bookings list -->
+    <div id="bookings-container"></div>
+
+  </div>
+
+  <!-- ── CANCELLATION DETAIL PANEL (hidden by default) ── -->
+  <div id="cancel-panel" style="display:none;">
+    <div class="main">
+      <span class="back-link" onclick="closeCancelPanel()">← Back to Bookings</span>
+      <h1 class="page-title">Cancel Booking</h1>
+      <p class="page-subtitle">Review the cancellation policy and refund before confirming.</p>
+
+      <div id="cancel-alert"></div>
+
+      <!-- Booking details -->
+      <div class="card" id="cancel-booking-info"></div>
+
+      <!-- Refund calculation -->
+      <div class="card" id="refund-calculation"></div>
+
+      <div class="btn-group">
+        <button class="btn btn-danger" id="confirm-cancel-btn">Confirm Cancellation</button>
+        <button class="btn btn-secondary" onclick="closeCancelPanel()">Keep Booking</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">AeroNexus Flight Management System &copy; 2025</div>
+</div>
+
+<script src="../js/data.js"></script>
+<script>
+
+function guardCustomer() {
+  if (!DB.session || DB.session.role !== 'customer') {
+    window.location.href = 'login.html'; return false;
+  }
+  return true;
+}
+function logout() { DB.session = null; window.location.href = 'login.html'; }
+
+function showAlert(containerId, type, msg) {
+  const el = document.getElementById(containerId);
+  if (el) el.innerHTML = msg ? `<div class="alert alert-${type}">${msg}</div>` : '';
+}
+
+/* ── Refund calculation per carrier policy ── */
+function calculateRefund(bookingAmount, dateOfTravel, carrier) {
+  const daysToTravel = Math.ceil((new Date(dateOfTravel) - new Date()) / 86400000);
+  let refundPct = 0, policy = '';
+
+  if (daysToTravel <= 0) {
+    refundPct = 0;
+    policy = 'No refund — travel date has passed.';
+  } else if (daysToTravel <= 2) {
+    refundPct = carrier.refund2 || 0;
+    policy = `Cancellation within 2 days of travel: ${refundPct}% refund`;
+  } else if (daysToTravel <= 10) {
+    refundPct = carrier.refund10 || 0;
+    policy = `Cancellation within 10 days of travel: ${refundPct}% refund`;
+  } else {
+    refundPct = carrier.refund20 || 0;
+    policy = `Cancellation 20+ days before travel: ${refundPct}% refund`;
+  }
+
+  const refundAmt = Math.round(bookingAmount * refundPct / 100);
+  return { refundPct, refundAmt, daysToTravel, policy };
+}
+
+/* ── Status badge ── */
+function statusBadge(status) {
+  const map = { Booked: 'badge-green', Cancelled: 'badge-red', 'Travel Completed': 'badge-grey' };
+  return `<span class="badge ${map[status] || 'badge-grey'}">${status}</span>`;
+}
+
+/* ── Render bookings list ── */
+function renderBookings() {
+  const userId     = DB.session.userId;
+  const filterVal  = document.getElementById('filter-status').value;
+  const myBookings = DB.bookings.filter(b =>
+    b.userId === userId && (!filterVal || b.bookingStatus === filterVal)
+  );
+
+  const container = document.getElementById('bookings-container');
+
+  if (myBookings.length === 0) {
+    container.innerHTML = `
+      <div class="card" style="text-align:center; color:#888; padding:32px;">
+        <p>No bookings found.</p>
+        <a href="flight-search.html" class="btn btn-primary btn-sm" style="margin-top:12px;">Search Flights</a>
+      </div>`;
+    return;
+  }
+
+  let html = '';
+  [...myBookings].reverse().forEach(b => {
+    const flight  = DB.flights.find(f => f.flightId === b.flightId) || {};
+    const carrier = DB.carriers.find(c => c.carrierId === flight.carrierId) || {};
+    const today   = new Date().toISOString().split('T')[0];
+    const canCancel = b.bookingStatus === 'Booked' && b.dateOfTravel > today;
+
+    html += `
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+        <div>
+          <div style="font-size:13px; color:#888;">Booking #${b.bookingId} &nbsp;·&nbsp; ${carrier.carrierName || '?'} Flight #${b.flightId}</div>
+          <div style="font-size:1.1rem; font-weight:bold; color:#1a3a5c; margin:4px 0;">
+            ${flight.origin || '?'} → ${flight.destination || '?'}
+          </div>
+        </div>
+        ${statusBadge(b.bookingStatus)}
+      </div>
+
+      <table style="font-size:13px; margin-top:10px; width:100%;">
+        <tr>
+          <td style="padding:4px 8px; color:#555; width:33%;">📅 Date</td>
+          <td style="padding:4px 8px;">${b.dateOfTravel}</td>
+          <td style="padding:4px 8px; color:#555;">💺 Class</td>
+          <td style="padding:4px 8px;">${b.seatCategory}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 8px; color:#555;">🎫 Seats</td>
+          <td style="padding:4px 8px;">${b.noOfSeats}</td>
+          <td style="padding:4px 8px; color:#555;">💰 Amount</td>
+          <td style="padding:4px 8px; font-weight:bold;">&#8377;${b.bookingAmount}</td>
+        </tr>
+      </table>
+
+      ${canCancel ? `
+      <div class="btn-group" style="margin-top:10px;">
+        <button class="btn btn-danger btn-sm" onclick="openCancelPanel(${b.bookingId})">
+          Cancel Booking
+        </button>
+      </div>` : ''}
+    </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+/* ── Open cancellation panel ── */
+function openCancelPanel(bookingId) {
+  const booking  = DB.bookings.find(b => b.bookingId === bookingId);
+  const flight   = DB.flights.find(f => f.flightId === booking.flightId) || {};
+  const carrier  = DB.carriers.find(c => c.carrierId === flight.carrierId) || {};
+  const { refundPct, refundAmt, daysToTravel, policy } = calculateRefund(
+    booking.bookingAmount, booking.dateOfTravel, carrier
+  );
+
+  /* Booking info */
+  document.getElementById('cancel-booking-info').innerHTML = `
+    <div class="card-title">Booking Details</div>
+    <table style="font-size:14px;">
+      <tr><td style="padding:5px 12px; color:#555;">Booking ID</td><td style="padding:5px 12px;">#${booking.bookingId}</td></tr>
+      <tr><td style="padding:5px 12px; color:#555;">Route</td><td style="padding:5px 12px;"><b>${flight.origin || '?'} → ${flight.destination || '?'}</b></td></tr>
+      <tr><td style="padding:5px 12px; color:#555;">Date of Travel</td><td style="padding:5px 12px;">${booking.dateOfTravel} <small style="color:#888;">(${daysToTravel} days from today)</small></td></tr>
+      <tr><td style="padding:5px 12px; color:#555;">Class / Seats</td><td style="padding:5px 12px;">${booking.seatCategory} × ${booking.noOfSeats}</td></tr>
+      <tr><td style="padding:5px 12px; color:#555;">Amount Paid</td><td style="padding:5px 12px;">&#8377;${booking.bookingAmount}</td></tr>
+    </table>`;
+
+  /* Refund breakdown */
+  document.getElementById('refund-calculation').innerHTML = `
+    <div class="card-title">Refund Calculation (${carrier.carrierName || 'Carrier'})</div>
+    <table style="font-size:14px;">
+      <tr style="background:#f7f9fc;">
+        <td style="padding:7px 12px; color:#555;">Cancellation Policy</td>
+        <td style="padding:7px 12px;">${policy}</td>
+      </tr>
+      <tr>
+        <td style="padding:7px 12px; color:#555;">Amount Paid</td>
+        <td style="padding:7px 12px;">&#8377;${booking.bookingAmount}</td>
+      </tr>
+      <tr>
+        <td style="padding:7px 12px; color:#555;">Refund %</td>
+        <td style="padding:7px 12px;">${refundPct}%</td>
+      </tr>
+      <tr style="background:${refundAmt > 0 ? '#eafaf1' : '#fdedec'}; font-weight:bold;">
+        <td style="padding:8px 12px;">Refund Amount</td>
+        <td style="padding:8px 12px; color:${refundAmt > 0 ? '#1e8449' : '#922b21'};">
+          &#8377;${refundAmt} ${refundAmt === 0 ? '(No Refund)' : ''}
+        </td>
+      </tr>
+    </table>`;
+
+  /* Confirm button handler */
+  document.getElementById('confirm-cancel-btn').onclick = () => confirmCancel(bookingId, carrier);
+
+  /* Show panel, hide list */
+  document.querySelector('.main').style.display = 'none';
+  document.getElementById('cancel-panel').style.display = 'block';
+  window.scrollTo(0, 0);
+}
+
+/* ── Close cancel panel ── */
+function closeCancelPanel() {
+  document.getElementById('cancel-panel').style.display = 'none';
+  document.querySelector('.main').style.display = 'block';
+  showAlert('cancel-alert','','');
+}
+
+/* ── Confirm cancellation ── */
+function confirmCancel(bookingId, carrier) {
+  const booking  = DB.bookings.find(b => b.bookingId === bookingId);
+  const schedule = DB.schedules.find(s => s.scheduleId === booking.scheduleId);
+  const { refundAmt } = calculateRefund(booking.bookingAmount, booking.dateOfTravel, carrier);
+
+  /* Update booking status */
+  booking.bookingStatus = 'Cancelled';
+
+  /* Release seats back to schedule */
+  if (schedule) {
+    if (booking.seatCategory === 'Economy')   schedule.bookedEconomy   = Math.max(0, schedule.bookedEconomy   - booking.noOfSeats);
+    if (booking.seatCategory === 'Business')  schedule.bookedBusiness  = Math.max(0, schedule.bookedBusiness  - booking.noOfSeats);
+    if (booking.seatCategory === 'Executive') schedule.bookedExecutive = Math.max(0, schedule.bookedExecutive - booking.noOfSeats);
+  }
+
+  closeCancelPanel();
+  renderBookings();
+
+  const refundMsg = refundAmt > 0
+    ? `Booking #${bookingId} cancelled. Refund of ₹${refundAmt} will be processed within 5-7 working days.`
+    : `Booking #${bookingId} cancelled. No refund applicable per carrier policy.`;
+  showAlert('bookings-alert', refundAmt > 0 ? 'success' : 'warning', refundMsg);
+}
+
+/* ── Init ── */
+function init() {
+  if (!guardCustomer()) return;
+  const user = DB.users.find(u => u.userId === DB.session.userId);
+  if (user) document.getElementById('nav-username').textContent = user.userName;
+  renderBookings();
+}
+
+init();
+</script>
+</body>
+</html>

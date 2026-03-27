@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>AeroNexus — Login</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     MEMBER 1 — Authentication Module
+     Pages: Landing, Admin Login,
+            Customer Login, Register,
+            Registration Success, Logout
+══════════════════════════════════════ -->
+
+<!-- ── LANDING PAGE ── -->
+<div id="pg-landing">
+  <div class="auth-wrap" style="background:#1a3a5c; flex-direction:column; gap:0;">
+    <div style="text-align:center; color:#fff; padding:40px 20px;">
+      <div style="font-size:3rem; margin-bottom:8px;">✈</div>
+      <h1 style="font-size:2rem; color:#fff; margin-bottom:6px;">AeroNexus</h1>
+      <p style="color:#9bb8d3; margin-bottom:36px;">Flight Management System</p>
+
+      <div style="display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">
+
+        <!-- Admin Card -->
+        <div class="auth-box" style="max-width:220px; text-align:center; cursor:pointer;"
+             onclick="showPage('pg-admin-login')">
+          <div style="font-size:2rem; margin-bottom:8px;">🛡️</div>
+          <h3 style="color:#1a3a5c;">Admin</h3>
+          <p style="font-size:13px; color:#666; margin:6px 0 12px;">
+            Manage carriers, flights &amp; schedules
+          </p>
+          <button class="btn btn-primary" style="width:100%;">Admin Login</button>
+        </div>
+
+        <!-- Customer Card -->
+        <div class="auth-box" style="max-width:220px; text-align:center; cursor:pointer;"
+             onclick="showPage('pg-customer-login')">
+          <div style="font-size:2rem; margin-bottom:8px;">👤</div>
+          <h3 style="color:#1a3a5c;">Customer</h3>
+          <p style="font-size:13px; color:#666; margin:6px 0 12px;">
+            Search flights &amp; book tickets
+          </p>
+          <button class="btn btn-success" style="width:100%;">Customer Login</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADMIN LOGIN ── -->
+<div id="pg-admin-login" class="hidden">
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <span class="back-link" onclick="showPage('pg-landing')">← Back to Home</span>
+      <h2>Admin Sign In</h2>
+      <p class="auth-sub">AeroNexus — Admin Portal</p>
+
+      <!-- Alert shown above form (US_Sprint_Web_003 requirement) -->
+      <div id="admin-alert"></div>
+
+      <div class="form-group">
+        <label class="form-label">
+          Admin ID <span class="required">*</span>
+        </label>
+        <input id="admin-id" class="form-input" type="number"
+               placeholder="e.g. 1001"
+               title="Enter your numeric Admin ID"/>
+        <div class="field-error" id="err-admin-id"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">
+          Password <span class="required">*</span>
+        </label>
+        <input id="admin-pw" class="form-input" type="password"
+               placeholder="Enter password"
+               title="Case-sensitive password"/>
+        <div class="field-error" id="err-admin-pw"></div>
+      </div>
+
+      <div class="btn-group" style="margin-top:16px;">
+        <button class="btn btn-primary" style="width:100%;"
+                onclick="adminLogin()">Sign In</button>
+      </div>
+
+      <p style="font-size:12px; color:#888; text-align:center; margin-top:12px;">
+        Default: ID <b>1001</b> &nbsp;/&nbsp; Password <b>Admin@123</b>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── CUSTOMER LOGIN ── -->
+<div id="pg-customer-login" class="hidden">
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <span class="back-link" onclick="showPage('pg-landing')">← Back to Home</span>
+      <h2>Customer Sign In</h2>
+      <p class="auth-sub">Welcome back to AeroNexus</p>
+
+      <div id="customer-alert"></div>
+
+      <div class="form-group">
+        <label class="form-label">
+          User ID <span class="required">*</span>
+        </label>
+        <input id="cust-id" class="form-input" type="number"
+               placeholder="Enter your User ID"
+               title="Your numeric User ID from registration"/>
+        <div class="field-error" id="err-cust-id"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">
+          Password <span class="required">*</span>
+        </label>
+        <input id="cust-pw" class="form-input" type="password"
+               placeholder="Enter password"
+               title="Case-sensitive password"/>
+        <div class="field-error" id="err-cust-pw"></div>
+      </div>
+
+      <div class="btn-group" style="margin-top:16px;">
+        <button class="btn btn-success" style="width:100%;"
+                onclick="customerLogin()">Sign In</button>
+      </div>
+
+      <p style="font-size:13px; text-align:center; margin-top:12px; color:#555;">
+        Don't have an account?
+        <a href="#" onclick="showPage('pg-register')">Register here</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── CUSTOMER REGISTER ── -->
+<div id="pg-register" class="hidden">
+  <div class="auth-wrap" style="align-items:flex-start; padding-top:32px;">
+    <div class="auth-box" style="max-width:560px;">
+      <span class="back-link" onclick="showPage('pg-customer-login')">← Back to Sign In</span>
+      <h2>Create Account</h2>
+      <p class="auth-sub">Register to book flights on AeroNexus</p>
+
+      <div id="register-alert"></div>
+
+      <!-- Auto-generated ID -->
+      <div class="form-group">
+        <label class="form-label">User ID</label>
+        <input id="reg-userid" class="form-input" readonly
+               title="Auto-generated by system"/>
+        <div class="tooltip-hint">Auto-generated. Note this down after registration.</div>
+      </div>
+
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Full Name <span class="required">*</span></label>
+          <input id="reg-name" class="form-input" placeholder="John Doe"
+                 title="Your full name"/>
+          <div class="field-error" id="err-reg-name"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date of Birth <span class="required">*</span></label>
+          <input id="reg-dob" class="form-input" type="date"
+                 title="Your date of birth"/>
+          <div class="field-error" id="err-reg-dob"></div>
+        </div>
+      </div>
+
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Password <span class="required">*</span></label>
+          <input id="reg-pw" class="form-input" type="password"
+                 placeholder="Min 8 chars"
+                 title="Min 8 chars, 1 uppercase, 1 number, 1 special char. No spaces."/>
+          <div class="field-error" id="err-reg-pw"></div>
+          <div class="tooltip-hint">Min 8 chars · 1 uppercase · 1 number · 1 special char</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone <span class="required">*</span></label>
+          <input id="reg-phone" class="form-input" placeholder="10-digit number"
+                 title="10-digit mobile number"/>
+          <div class="field-error" id="err-reg-phone"></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Email ID <span class="required">*</span></label>
+        <input id="reg-email" class="form-input" type="email"
+               placeholder="you@example.com"
+               title="Valid email address"/>
+        <div class="field-error" id="err-reg-email"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Address Line 1 <span class="required">*</span></label>
+        <input id="reg-addr1" class="form-input" placeholder="Street / House No."
+               title="Primary address"/>
+        <div class="field-error" id="err-reg-addr1"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Address Line 2</label>
+        <input id="reg-addr2" class="form-input" placeholder="Landmark, Area (optional)"/>
+      </div>
+
+      <div class="form-grid-3">
+        <div class="form-group">
+          <label class="form-label">City <span class="required">*</span></label>
+          <input id="reg-city" class="form-input" placeholder="City"/>
+          <div class="field-error" id="err-reg-city"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">State <span class="required">*</span></label>
+          <input id="reg-state" class="form-input" placeholder="State"/>
+          <div class="field-error" id="err-reg-state"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Country <span class="required">*</span></label>
+          <input id="reg-country" class="form-input" value="India"/>
+          <div class="field-error" id="err-reg-country"></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">ZIP Code <span class="required">*</span></label>
+        <input id="reg-zip" class="form-input" placeholder="6-digit PIN"
+               title="6-digit postal code"/>
+        <div class="field-error" id="err-reg-zip"></div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-success" onclick="registerCustomer()">Create Account</button>
+        <button class="btn btn-secondary" onclick="showPage('pg-customer-login')">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── REGISTRATION SUCCESS ── -->
+<div id="pg-reg-success" class="hidden">
+  <div class="auth-wrap">
+    <div class="auth-box" style="text-align:center;">
+      <div style="font-size:3rem; margin-bottom:12px;">✅</div>
+      <h2 style="color:#27ae60;">Registration Successful!</h2>
+      <p style="color:#555; margin:8px 0 16px;">Your AeroNexus account has been created.</p>
+      <div id="reg-success-msg" class="alert alert-success"></div>
+      <button class="btn btn-primary" style="width:100%; margin-top:8px;"
+              onclick="showPage('pg-customer-login')">Proceed to Sign In →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     SCRIPTS — Member 1: Auth Module
+════════════════════════════════════════ -->
+<script src="../js/data.js"></script>
+<script>
+
+/* ── Page router (simple show/hide) ── */
+function showPage(id) {
+  ['pg-landing','pg-admin-login','pg-customer-login','pg-register','pg-reg-success']
+    .forEach(p => {
+      const el = document.getElementById(p);
+      if (el) el.classList.add('hidden');
+    });
+  const target = document.getElementById(id);
+  if (target) target.classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+
+/* ── Alert helper (no alert boxes — US_Sprint_Web_003) ── */
+function showAlert(containerId, type, msg) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!msg) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+}
+
+/* ── Field error helper ── */
+function setErr(id, msg) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = msg;
+}
+function clearErrs(ids) { ids.forEach(id => setErr(id, '')); }
+function v(id) { return (document.getElementById(id) || {}).value || ''; }
+
+/* ── Password validation ── */
+function validatePassword(pw) {
+  if (pw.length < 8)            return 'Minimum 8 characters required.';
+  if (!/[A-Z]/.test(pw))        return 'At least 1 uppercase letter required.';
+  if (!/[0-9]/.test(pw))        return 'At least 1 number required.';
+  if (!/[^a-zA-Z0-9]/.test(pw)) return 'At least 1 special character required.';
+  if (/\s/.test(pw))            return 'No spaces allowed.';
+  return '';
+}
+
+/* ════════════════
+   ADMIN LOGIN
+════════════════ */
+function adminLogin() {
+  clearErrs(['err-admin-id','err-admin-pw']);
+  showAlert('admin-alert', '', '');
+
+  const id = parseInt(v('admin-id'));
+  const pw = v('admin-pw');
+  let ok = true;
+
+  if (!id) { setErr('err-admin-id', 'Admin ID is required.'); ok = false; }
+  if (!pw) { setErr('err-admin-pw', 'Password is required.'); ok = false; }
+  if (!ok) return;
+
+  const admin = DB.admins.find(a => a.id === id && caesarDecrypt(a.password) === pw);
+  if (!admin) {
+    showAlert('admin-alert', 'error',
+      'User Id and/or Password is Wrong. Please check your credentials.');
+    return;
+  }
+
+  /* Set session */
+  DB.session = { userId: admin.id, role: 'admin', name: admin.name };
+
+  /* Hand off to Admin Dashboard (Member 10) */
+  window.location.href = 'admin-dashboard.html';
+}
+
+/* ════════════════
+   CUSTOMER LOGIN
+════════════════ */
+function customerLogin() {
+  clearErrs(['err-cust-id','err-cust-pw']);
+  showAlert('customer-alert', '', '');
+
+  const id = parseInt(v('cust-id'));
+  const pw = v('cust-pw');
+  let ok = true;
+
+  if (!id) { setErr('err-cust-id', 'User ID is required.'); ok = false; }
+  if (!pw) { setErr('err-cust-pw', 'Password is required.'); ok = false; }
+  if (!ok) return;
+
+  const user = DB.users.find(u => u.userId === id && caesarDecrypt(u.password) === pw);
+  if (!user) {
+    showAlert('customer-alert', 'error',
+      'User Id and/or Password is Wrong. Please check your credentials.');
+    return;
+  }
+
+  /* Set session */
+  DB.session = { userId: user.userId, role: 'customer', name: user.userName };
+
+  /* Hand off to User Dashboard (Member 2) */
+  window.location.href = 'user-dashboard.html';
+}
+
+/* ════════════════
+   REGISTER
+════════════════ */
+function registerCustomer() {
+  const errIds = ['err-reg-name','err-reg-pw','err-reg-phone','err-reg-email',
+                  'err-reg-dob','err-reg-addr1','err-reg-city',
+                  'err-reg-state','err-reg-country','err-reg-zip'];
+  clearErrs(errIds);
+  showAlert('register-alert', '', '');
+
+  const name   = v('reg-name').trim();
+  const pw     = v('reg-pw');
+  const phone  = v('reg-phone').trim();
+  const email  = v('reg-email').trim();
+  const dob    = v('reg-dob');
+  const addr1  = v('reg-addr1').trim();
+  const city   = v('reg-city').trim();
+  const state  = v('reg-state').trim();
+  const country= v('reg-country').trim();
+  const zip    = v('reg-zip').trim();
+  let ok = true;
+
+  if (!name)  { setErr('err-reg-name',  'Name is required.'); ok = false; }
+  const pwErr = validatePassword(pw);
+  if (pwErr)  { setErr('err-reg-pw',    pwErr); ok = false; }
+  if (!/^\d{10}$/.test(phone))
+              { setErr('err-reg-phone', 'Enter a valid 10-digit phone number.'); ok = false; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+              { setErr('err-reg-email', 'Enter a valid email address.'); ok = false; }
+  if (!dob)   { setErr('err-reg-dob',   'Date of birth is required.'); ok = false; }
+  if (!addr1) { setErr('err-reg-addr1', 'Address is required.'); ok = false; }
+  if (!city)  { setErr('err-reg-city',  'City is required.'); ok = false; }
+  if (!state) { setErr('err-reg-state', 'State is required.'); ok = false; }
+  if (!country){ setErr('err-reg-country','Country is required.'); ok = false; }
+  if (!/^\d{6}$/.test(zip))
+              { setErr('err-reg-zip',   'Enter a valid 6-digit ZIP code.'); ok = false; }
+  if (!ok) return;
+
+  if (DB.users.find(u => u.emailId === email)) {
+    showAlert('register-alert', 'error', 'An account with this email already exists.');
+    return;
+  }
+
+  const newId = DB.nextUserId++;
+  DB.users.push({
+    userId: newId, userName: name,
+    password: caesarEncrypt(pw), role: 'Customer',
+    customerCategory: 'Silver',
+    phone, emailId: email,
+    address1: addr1, address2: v('reg-addr2').trim(),
+    city, state, country, zipCode: zip, dob
+  });
+
+  document.getElementById('reg-success-msg').textContent =
+    `Account created! Your User ID is: ${newId}. Please save it for login.`;
+  showPage('pg-reg-success');
+}
+
+/* ── Init: auto-fill register ID field ── */
+document.getElementById('reg-userid').value = DB.nextUserId;
+
+</script>
+</body>
+</html>

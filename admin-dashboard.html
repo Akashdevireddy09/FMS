@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>AeroNexus — Admin Dashboard</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     MEMBER 10 — Admin Dashboard &
+                 Flight Management Module
+     Sections: Dashboard, Carriers CRUD,
+               Flights CRUD, Schedules CRUD,
+               All Users, All Bookings
+══════════════════════════════════════ -->
+
+<div class="page-wrap">
+
+  <nav class="navbar">
+    <a class="brand" href="login.html">✈ AeroNexus Admin</a>
+    <div class="nav-links">
+      <button onclick="showSection('dashboard')">Dashboard</button>
+      <button onclick="showSection('carriers')">Carriers</button>
+      <button onclick="showSection('flights')">Flights</button>
+      <button onclick="showSection('schedules')">Schedules</button>
+      <button onclick="showSection('users')">Users</button>
+      <button onclick="showSection('bookings')">Bookings</button>
+    </div>
+    <div class="nav-user">
+      <span id="admin-name"></span> &nbsp;|&nbsp;
+      <button onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div id="admin-alert"></div>
+    <div id="section-content"></div>
+  </div>
+
+  <div class="footer">AeroNexus Admin Panel &copy; 2025</div>
+</div>
+
+<script src="../js/data.js"></script>
+<script>
+
+/* ── Guard admin ── */
+function guardAdmin() {
+  if (!DB.session || DB.session.role !== 'admin') {
+    window.location.href = 'login.html'; return false;
+  }
+  return true;
+}
+function logout() { DB.session = null; window.location.href = 'login.html'; }
+
+function showAlert(type, msg) {
+  const el = document.getElementById('admin-alert');
+  el.innerHTML = msg ? `<div class="alert alert-${type}">${msg}</div>` : '';
+}
+function setErr(id, msg) { const el = document.getElementById(id); if (el) el.textContent = msg; }
+function v(id) { return (document.getElementById(id) || {}).value || ''; }
+
+/* ── Section router ── */
+function showSection(name) {
+  showAlert('', '');
+  const map = {
+    dashboard: renderDashboard,
+    carriers:  renderCarriers,
+    flights:   renderFlights,
+    schedules: renderSchedules,
+    users:     renderUsers,
+    bookings:  renderAllBookings
+  };
+  if (map[name]) document.getElementById('section-content').innerHTML = map[name]();
+}
+
+/* ══════════════════════════
+   DASHBOARD
+══════════════════════════ */
+function renderDashboard() {
+  const totalBookings = DB.bookings.length;
+  const revenue       = DB.bookings.reduce((s, b) => s + b.bookingAmount, 0);
+  const activeBookings= DB.bookings.filter(b => b.bookingStatus === 'Booked').length;
+
+  return `
+  <h1 class="page-title">Admin Dashboard</h1>
+  <p class="page-subtitle">System overview — AeroNexus Flight Management.</p>
+
+  <div class="stats-row">
+    <div class="stat-box"><div class="stat-num">${DB.carriers.length}</div><div class="stat-label">Carriers</div></div>
+    <div class="stat-box"><div class="stat-num">${DB.flights.length}</div><div class="stat-label">Flights</div></div>
+    <div class="stat-box"><div class="stat-num">${DB.schedules.length}</div><div class="stat-label">Schedules</div></div>
+    <div class="stat-box"><div class="stat-num">${DB.users.length}</div><div class="stat-label">Customers</div></div>
+    <div class="stat-box"><div class="stat-num">${activeBookings}</div><div class="stat-label">Active Bookings</div></div>
+    <div class="stat-box"><div class="stat-num" style="font-size:1.4rem;">&#8377;${revenue.toLocaleString()}</div><div class="stat-label">Total Revenue</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Quick Navigation</div>
+    <div class="btn-group">
+      <button class="btn btn-primary"   onclick="showSection('carriers')">Manage Carriers</button>
+      <button class="btn btn-secondary" onclick="showSection('flights')">Manage Flights</button>
+      <button class="btn btn-secondary" onclick="showSection('schedules')">Manage Schedules</button>
+      <button class="btn btn-secondary" onclick="showSection('users')">View Users</button>
+      <button class="btn btn-secondary" onclick="showSection('bookings')">All Bookings</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Recent Bookings</div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>ID</th><th>Route</th><th>Customer</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>
+          ${[...DB.bookings].reverse().slice(0,5).map(b => {
+            const f = DB.flights.find(x => x.flightId === b.flightId) || {};
+            const u = DB.users.find(x => x.userId === b.userId) || {};
+            return `<tr>
+              <td>#${b.bookingId}</td>
+              <td>${f.origin||'?'} → ${f.destination||'?'}</td>
+              <td>${u.userName||'?'}</td>
+              <td>${b.dateOfTravel}</td>
+              <td>&#8377;${b.bookingAmount}</td>
+              <td>${b.bookingStatus}</td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="6" class="table-empty">No bookings yet</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ══════════════════════════
+   CARRIERS CRUD
+══════════════════════════ */
+let editCarrierId = null;
+
+function renderCarriers() {
+  return `
+  <h1 class="page-title">Carrier Management</h1>
+  <p class="page-subtitle">Add, edit and delete airline carriers.</p>
+  <div id="carrier-form-area"></div>
+  <div class="card">
+    <div class="card-title">All Carriers</div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Edit</th><th>Del</th>
+            <th>ID</th><th>Name</th>
+            <th>30D%</th><th>60D%</th><th>90D%</th><th>Bulk%</th>
+            <th>Refund 2D</th><th>Refund 10D</th><th>Refund 20D</th>
+            <th>Silver%</th><th>Gold%</th><th>Platinum%</th>
+          </tr>
+        </thead>
+        <tbody id="carrier-tbody">
+          ${DB.carriers.map(c => `<tr>
+            <td><input type="radio" name="c-edit" value="${c.carrierId}"/></td>
+            <td><input type="checkbox" class="c-del" value="${c.carrierId}"/></td>
+            <td>#${c.carrierId}</td><td><b>${c.carrierName}</b></td>
+            <td>${c.disc30}%</td><td>${c.disc60}%</td><td>${c.disc90}%</td><td>${c.bulkDiscount}%</td>
+            <td>${c.refund2}%</td><td>${c.refund10}%</td><td>${c.refund20}%</td>
+            <td>${c.silverDisc}%</td><td>${c.goldDisc}%</td><td>${c.platinumDisc}%</td>
+          </tr>`).join('') || '<tr><td colspan="14" class="table-empty">No carriers</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-success"   onclick="showCarrierForm('add')">+ Add Carrier</button>
+      <button class="btn btn-warning"   onclick="editCarrierSelected()">Edit Carrier</button>
+      <button class="btn btn-danger"    onclick="deleteCarriersSelected()">Delete Carrier(s)</button>
+    </div>
+  </div>`;
+}
+
+function showCarrierForm(mode, id=null) {
+  editCarrierId = id;
+  const c = id ? DB.carriers.find(x => x.carrierId === id) : null;
+  const nextId = DB.nextCarrierId;
+  document.getElementById('carrier-form-area').innerHTML = `
+    <div class="card">
+      <div class="card-title">${mode === 'add' ? 'Add New Carrier' : 'Edit Carrier #' + id}</div>
+      <div id="carrier-form-alert"></div>
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Carrier ID</label>
+          <input class="form-input" id="cf-id" value="${mode==='add'?nextId:c.carrierId}" readonly/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Carrier Name <span class="required">*</span></label>
+          <input class="form-input" id="cf-name" value="${c?c.carrierName:''}" placeholder="e.g. Air India"/>
+          <div class="field-error" id="err-cf-name"></div>
+        </div>
+      </div>
+      <div class="section-title">Advance Booking Discounts (%)</div>
+      <div class="form-grid-3">
+        <div class="form-group"><label class="form-label">30 Days <span class="required">*</span></label>
+          <input class="form-input" id="cf-d30" type="number" min="0" max="100" value="${c?c.disc30:''}"/></div>
+        <div class="form-group"><label class="form-label">60 Days <span class="required">*</span></label>
+          <input class="form-input" id="cf-d60" type="number" min="0" max="100" value="${c?c.disc60:''}"/></div>
+        <div class="form-group"><label class="form-label">90 Days <span class="required">*</span></label>
+          <input class="form-input" id="cf-d90" type="number" min="0" max="100" value="${c?c.disc90:''}"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Bulk Booking Discount (%) <span class="required">*</span></label>
+        <input class="form-input" id="cf-bulk" type="number" min="0" max="100" value="${c?c.bulkDiscount:''}"/></div>
+      <div class="section-title">Refund Percentages (%)</div>
+      <div class="form-grid-3">
+        <div class="form-group"><label class="form-label">Cancellation ≤ 2 days <span class="required">*</span></label>
+          <input class="form-input" id="cf-r2" type="number" min="0" max="100" value="${c?c.refund2:''}"/></div>
+        <div class="form-group"><label class="form-label">Cancellation ≤ 10 days <span class="required">*</span></label>
+          <input class="form-input" id="cf-r10" type="number" min="0" max="100" value="${c?c.refund10:''}"/></div>
+        <div class="form-group"><label class="form-label">Cancellation 20+ days <span class="required">*</span></label>
+          <input class="form-input" id="cf-r20" type="number" min="0" max="100" value="${c?c.refund20:''}"/></div>
+      </div>
+      <div class="section-title">Loyalty Tier Discounts (%)</div>
+      <div class="form-grid-3">
+        <div class="form-group"><label class="form-label">Silver <span class="required">*</span></label>
+          <input class="form-input" id="cf-sil" type="number" min="0" max="100" value="${c?c.silverDisc:''}"/></div>
+        <div class="form-group"><label class="form-label">Gold <span class="required">*</span></label>
+          <input class="form-input" id="cf-gld" type="number" min="0" max="100" value="${c?c.goldDisc:''}"/></div>
+        <div class="form-group"><label class="form-label">Platinum <span class="required">*</span></label>
+          <input class="form-input" id="cf-plt" type="number" min="0" max="100" value="${c?c.platinumDisc:''}"/></div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="saveCarrier('${mode}')">Save Carrier</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('carrier-form-area').innerHTML=''">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function editCarrierSelected() {
+  const sel = document.querySelector('input[name="c-edit"]:checked');
+  if (!sel) { showAlert('warning', 'Please select Carrier to be Edited'); return; }
+  showCarrierForm('edit', parseInt(sel.value));
+}
+
+function deleteCarriersSelected() {
+  const chks = [...document.querySelectorAll('.c-del:checked')];
+  if (!chks.length) { showAlert('warning', 'Please select Carrier(s) to be Deleted'); return; }
+  const ids = chks.map(c => parseInt(c.value));
+  DB.carriers = DB.carriers.filter(c => !ids.includes(c.carrierId));
+  showAlert('success', `${ids.length} carrier(s) deleted successfully.`);
+  showSection('carriers');
+}
+
+function saveCarrier(mode) {
+  setErr('err-cf-name','');
+  const name = v('cf-name').trim();
+  if (!name) { setErr('err-cf-name','Carrier name is required.'); return; }
+  const nums = ['cf-d30','cf-d60','cf-d90','cf-bulk','cf-r2','cf-r10','cf-r20','cf-sil','cf-gld','cf-plt']
+    .map(id => parseInt(v(id)));
+  if (nums.some(n => isNaN(n)||n<0||n>100)) {
+    document.getElementById('carrier-form-alert').innerHTML =
+      '<div class="alert alert-error">All values must be between 0 and 100.</div>';
+    return;
+  }
+  const [d30,d60,d90,bulk,r2,r10,r20,sil,gld,plt] = nums;
+
+  if (mode === 'add') {
+    const newId = DB.nextCarrierId++;
+    DB.carriers.push({carrierId:newId,carrierName:name,disc30:d30,disc60:d60,disc90:d90,
+      bulkDiscount:bulk,refund2:r2,refund10:r10,refund20:r20,silverDisc:sil,goldDisc:gld,platinumDisc:plt});
+    showAlert('success','Carrier Information Saved Successfully in the System.');
+  } else {
+    const orig = DB.carriers.find(c => c.carrierId === editCarrierId);
+    const updated = {carrierId:orig.carrierId,carrierName:name,disc30:d30,disc60:d60,disc90:d90,
+      bulkDiscount:bulk,refund2:r2,refund10:r10,refund20:r20,silverDisc:sil,goldDisc:gld,platinumDisc:plt};
+    if (JSON.stringify(orig) === JSON.stringify(updated)) {
+      document.getElementById('carrier-form-alert').innerHTML =
+        '<div class="alert alert-warning">There are no changes made in the form to be saved</div>';
+      return;
+    }
+    Object.assign(orig, updated);
+    showAlert('success','Carrier updated successfully.');
+  }
+  showSection('carriers');
+}
+
+/* ══════════════════════════
+   FLIGHTS CRUD
+══════════════════════════ */
+let editFlightId = null;
+
+function renderFlights() {
+  return `
+  <h1 class="page-title">Flight Management</h1>
+  <p class="page-subtitle">Manage flights, routes, fares and seat capacities.</p>
+  <div id="flight-form-area"></div>
+  <div class="card">
+    <div class="card-title">All Flights</div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>Edit</th><th>Del</th><th>ID</th><th>Carrier</th><th>Route</th>
+              <th>Fare</th><th>Economy</th><th>Business</th><th>Executive</th></tr>
+        </thead>
+        <tbody>
+          ${DB.flights.map(f => {
+            const c = DB.carriers.find(x => x.carrierId === f.carrierId) || {};
+            return `<tr>
+              <td><input type="radio" name="f-edit" value="${f.flightId}"/></td>
+              <td><input type="checkbox" class="f-del" value="${f.flightId}"/></td>
+              <td>#${f.flightId}</td>
+              <td>${c.carrierName||'?'}</td>
+              <td>${f.origin} → ${f.destination}</td>
+              <td>&#8377;${f.airFare}</td>
+              <td>${f.seatEconomy}</td><td>${f.seatBusiness}</td><td>${f.seatExecutive}</td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="9" class="table-empty">No flights</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-success"  onclick="showFlightForm('add')">+ Add Flight</button>
+      <button class="btn btn-warning"  onclick="editFlightSelected()">Edit Flight</button>
+      <button class="btn btn-danger"   onclick="deleteFlightsSelected()">Delete Flight(s)</button>
+    </div>
+  </div>`;
+}
+
+function showFlightForm(mode, id=null) {
+  editFlightId = id;
+  const f = id ? DB.flights.find(x => x.flightId === id) : null;
+  document.getElementById('flight-form-area').innerHTML = `
+    <div class="card">
+      <div class="card-title">${mode==='add'?'Add New Flight':'Edit Flight #'+id}</div>
+      <div id="flight-form-alert"></div>
+      <div class="form-grid-2">
+        <div class="form-group"><label class="form-label">Flight ID</label>
+          <input class="form-input" id="ff-id" value="${mode==='add'?DB.nextFlightId:f.flightId}" readonly/></div>
+        <div class="form-group"><label class="form-label">Carrier <span class="required">*</span></label>
+          <select class="form-select" id="ff-carrier">
+            <option value="">Select Carrier</option>
+            ${DB.carriers.map(c=>`<option value="${c.carrierId}" ${f&&f.carrierId===c.carrierId?'selected':''}>${c.carrierName}</option>`).join('')}
+          </select>
+          <div class="field-error" id="err-ff-carrier"></div></div>
+        <div class="form-group"><label class="form-label">Origin <span class="required">*</span></label>
+          <input class="form-input" id="ff-origin" value="${f?f.origin:''}" placeholder="e.g. Mumbai"/>
+          <div class="field-error" id="err-ff-origin"></div></div>
+        <div class="form-group"><label class="form-label">Destination <span class="required">*</span></label>
+          <input class="form-input" id="ff-dest" value="${f?f.destination:''}" placeholder="e.g. Delhi"/>
+          <div class="field-error" id="err-ff-dest"></div></div>
+        <div class="form-group"><label class="form-label">Air Fare (&#8377;) <span class="required">*</span></label>
+          <input class="form-input" id="ff-fare" type="number" min="1" value="${f?f.airFare:''}"/>
+          <div class="field-error" id="err-ff-fare"></div></div>
+      </div>
+      <div class="section-title">Seat Capacities</div>
+      <div class="form-grid-3">
+        <div class="form-group"><label class="form-label">Economy (min 20) <span class="required">*</span></label>
+          <input class="form-input" id="ff-eco" type="number" min="20" value="${f?f.seatEconomy:''}"/>
+          <div class="field-error" id="err-ff-eco"></div></div>
+        <div class="form-group"><label class="form-label">Business (min 10) <span class="required">*</span></label>
+          <input class="form-input" id="ff-bus" type="number" min="10" value="${f?f.seatBusiness:''}"/>
+          <div class="field-error" id="err-ff-bus"></div></div>
+        <div class="form-group"><label class="form-label">Executive (min 5) <span class="required">*</span></label>
+          <input class="form-input" id="ff-exe" type="number" min="5" value="${f?f.seatExecutive:''}"/>
+          <div class="field-error" id="err-ff-exe"></div></div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="saveFlight('${mode}')">Save Flight</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('flight-form-area').innerHTML=''">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function editFlightSelected() {
+  const sel = document.querySelector('input[name="f-edit"]:checked');
+  if (!sel) { showAlert('warning','Please select a Flight to be Edited'); return; }
+  showFlightForm('edit', parseInt(sel.value));
+}
+
+function deleteFlightsSelected() {
+  const chks = [...document.querySelectorAll('.f-del:checked')];
+  if (!chks.length) { showAlert('warning','Please select Flight(s) to be Deleted'); return; }
+  const ids = chks.map(c => parseInt(c.value));
+  DB.flights = DB.flights.filter(f => !ids.includes(f.flightId));
+  showAlert('success',`${ids.length} flight(s) deleted.`);
+  showSection('flights');
+}
+
+function saveFlight(mode) {
+  ['err-ff-carrier','err-ff-origin','err-ff-dest','err-ff-fare','err-ff-eco','err-ff-bus','err-ff-exe']
+    .forEach(id => setErr(id,''));
+  const carrierId = parseInt(v('ff-carrier'));
+  const origin    = v('ff-origin').trim();
+  const dest      = v('ff-dest').trim();
+  const fare      = parseInt(v('ff-fare'));
+  const eco       = parseInt(v('ff-eco'));
+  const bus       = parseInt(v('ff-bus'));
+  const exe       = parseInt(v('ff-exe'));
+  let ok = true;
+  if (!carrierId)    { setErr('err-ff-carrier','Select a carrier.'); ok=false; }
+  if (!origin)       { setErr('err-ff-origin','Origin required.'); ok=false; }
+  if (!dest)         { setErr('err-ff-dest','Destination required.'); ok=false; }
+  if (!fare||fare<1) { setErr('err-ff-fare','Valid fare required.'); ok=false; }
+  if (!eco||eco<20)  { setErr('err-ff-eco','Min 20 economy seats.'); ok=false; }
+  if (!bus||bus<10)  { setErr('err-ff-bus','Min 10 business seats.'); ok=false; }
+  if (!exe||exe<5)   { setErr('err-ff-exe','Min 5 executive seats.'); ok=false; }
+  if (!ok) return;
+
+  if (mode === 'add') {
+    const newId = DB.nextFlightId++;
+    DB.flights.push({flightId:newId,carrierId,origin,destination:dest,airFare:fare,
+      seatEconomy:eco,seatBusiness:bus,seatExecutive:exe});
+    showAlert('success','Flight saved successfully.');
+  } else {
+    const orig = DB.flights.find(f => f.flightId === editFlightId);
+    const updated = {flightId:orig.flightId,carrierId,origin,destination:dest,airFare:fare,
+      seatEconomy:eco,seatBusiness:bus,seatExecutive:exe};
+    if (JSON.stringify(orig)===JSON.stringify(updated)) {
+      document.getElementById('flight-form-alert').innerHTML =
+        '<div class="alert alert-warning">There are no changes made in the form to be saved</div>';
+      return;
+    }
+    Object.assign(orig, updated);
+    showAlert('success','Flight updated successfully.');
+  }
+  showSection('flights');
+}
+
+/* ══════════════════════════
+   SCHEDULES CRUD
+══════════════════════════ */
+let editScheduleId = null;
+
+function renderSchedules() {
+  return `
+  <h1 class="page-title">Schedule Management</h1>
+  <p class="page-subtitle">Manage flight dates and seat availability.</p>
+  <div id="sched-form-area"></div>
+  <div class="card">
+    <div class="card-title">All Schedules</div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>Edit</th><th>Del</th><th>ID</th><th>Flight</th><th>Route</th>
+              <th>Date</th><th>Eco Booked</th><th>Bus Booked</th><th>Exe Booked</th></tr>
+        </thead>
+        <tbody>
+          ${DB.schedules.map(s => {
+            const f = DB.flights.find(x => x.flightId === s.flightId)||{};
+            const c = DB.carriers.find(x => x.carrierId === f.carrierId)||{};
+            return `<tr>
+              <td><input type="radio" name="s-edit" value="${s.scheduleId}"/></td>
+              <td><input type="checkbox" class="s-del" value="${s.scheduleId}"/></td>
+              <td>#${s.scheduleId}</td>
+              <td>${c.carrierName||'?'} #${s.flightId}</td>
+              <td>${f.origin||'?'} → ${f.destination||'?'}</td>
+              <td>${s.dateOfTravel}</td>
+              <td>${s.bookedEconomy}/${f.seatEconomy||'?'}</td>
+              <td>${s.bookedBusiness}/${f.seatBusiness||'?'}</td>
+              <td>${s.bookedExecutive}/${f.seatExecutive||'?'}</td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="9" class="table-empty">No schedules</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-success"  onclick="showSchedForm('add')">+ Add Schedule</button>
+      <button class="btn btn-warning"  onclick="editSchedSelected()">Edit Schedule</button>
+      <button class="btn btn-danger"   onclick="deleteSchedsSelected()">Delete Schedule(s)</button>
+    </div>
+  </div>`;
+}
+
+function showSchedForm(mode, id=null) {
+  editScheduleId = id;
+  const s = id ? DB.schedules.find(x => x.scheduleId === id) : null;
+  document.getElementById('sched-form-area').innerHTML = `
+    <div class="card">
+      <div class="card-title">${mode==='add'?'Add Schedule':'Edit Schedule #'+id}</div>
+      <div id="sched-form-alert"></div>
+      <div class="form-grid-2">
+        <div class="form-group"><label class="form-label">Schedule ID</label>
+          <input class="form-input" id="sf-id" value="${mode==='add'?DB.nextScheduleId:s.scheduleId}" readonly/></div>
+        <div class="form-group"><label class="form-label">Flight <span class="required">*</span></label>
+          <select class="form-select" id="sf-flight">
+            <option value="">Select Flight</option>
+            ${DB.flights.map(f=>{
+              const c=DB.carriers.find(x=>x.carrierId===f.carrierId)||{};
+              return `<option value="${f.flightId}" ${s&&s.flightId===f.flightId?'selected':''}>#${f.flightId} ${c.carrierName||''} (${f.origin}→${f.destination})</option>`;
+            }).join('')}
+          </select>
+          <div class="field-error" id="err-sf-flight"></div></div>
+        <div class="form-group"><label class="form-label">Date of Travel <span class="required">*</span></label>
+          <input class="form-input" id="sf-date" type="date" value="${s?s.dateOfTravel:''}" min="${new Date().toISOString().split('T')[0]}"/>
+          <div class="field-error" id="err-sf-date"></div></div>
+      </div>
+      ${mode==='edit'?`
+      <div class="section-title">Booked Counts (current)</div>
+      <div class="form-grid-3">
+        <div class="form-group"><label class="form-label">Economy Booked</label>
+          <input class="form-input" id="sf-beco" type="number" min="0" value="${s.bookedEconomy}"/></div>
+        <div class="form-group"><label class="form-label">Business Booked</label>
+          <input class="form-input" id="sf-bbus" type="number" min="0" value="${s.bookedBusiness}"/></div>
+        <div class="form-group"><label class="form-label">Executive Booked</label>
+          <input class="form-input" id="sf-bexe" type="number" min="0" value="${s.bookedExecutive}"/></div>
+      </div>`:''}
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="saveSched('${mode}')">Save Schedule</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('sched-form-area').innerHTML=''">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function editSchedSelected() {
+  const sel = document.querySelector('input[name="s-edit"]:checked');
+  if (!sel) { showAlert('warning','Please select a Schedule to be Edited'); return; }
+  showSchedForm('edit', parseInt(sel.value));
+}
+
+function deleteSchedsSelected() {
+  const chks = [...document.querySelectorAll('.s-del:checked')];
+  if (!chks.length) { showAlert('warning','Please select Schedule(s) to be Deleted'); return; }
+  const ids = chks.map(c => parseInt(c.value));
+  DB.schedules = DB.schedules.filter(s => !ids.includes(s.scheduleId));
+  showAlert('success',`${ids.length} schedule(s) deleted.`);
+  showSection('schedules');
+}
+
+function saveSched(mode) {
+  setErr('err-sf-flight',''); setErr('err-sf-date','');
+  const flightId = parseInt(v('sf-flight'));
+  const date     = v('sf-date');
+  let ok = true;
+  if (!flightId) { setErr('err-sf-flight','Select a flight.'); ok=false; }
+  if (!date)     { setErr('err-sf-date','Date required.'); ok=false; }
+  if (!ok) return;
+
+  if (mode === 'add') {
+    const newId = DB.nextScheduleId++;
+    DB.schedules.push({scheduleId:newId,flightId,dateOfTravel:date,
+      bookedEconomy:0,bookedBusiness:0,bookedExecutive:0});
+    showAlert('success','Schedule saved successfully.');
+  } else {
+    const orig = DB.schedules.find(s => s.scheduleId === editScheduleId);
+    const beco = parseInt(v('sf-beco'))||0;
+    const bbus = parseInt(v('sf-bbus'))||0;
+    const bexe = parseInt(v('sf-bexe'))||0;
+    const updated = {...orig,flightId,dateOfTravel:date,bookedEconomy:beco,bookedBusiness:bbus,bookedExecutive:bexe};
+    if (JSON.stringify(orig)===JSON.stringify(updated)) {
+      document.getElementById('sched-form-alert').innerHTML =
+        '<div class="alert alert-warning">There are no changes made in the form to be saved</div>';
+      return;
+    }
+    Object.assign(orig, updated);
+    showAlert('success','Schedule updated.');
+  }
+  showSection('schedules');
+}
+
+/* ══════════════════════════
+   USERS (read-only)
+══════════════════════════ */
+function renderUsers() {
+  return `
+  <h1 class="page-title">Registered Customers</h1>
+  <p class="page-subtitle">All customer accounts in the system.</p>
+  <div class="card">
+    <div class="card-title">All Users (${DB.users.length})</div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>City</th><th>Category</th><th>DOB</th></tr></thead>
+        <tbody>
+          ${DB.users.map(u=>`<tr>
+            <td>#${u.userId}</td>
+            <td><b>${u.userName}</b></td>
+            <td>${u.emailId}</td>
+            <td>${u.phone}</td>
+            <td>${u.city}</td>
+            <td>${u.customerCategory}</td>
+            <td>${u.dob}</td>
+          </tr>`).join('') || '<tr><td colspan="7" class="table-empty">No users</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ══════════════════════════
+   ALL BOOKINGS (read-only)
+══════════════════════════ */
+function renderAllBookings() {
+  return `
+  <h1 class="page-title">All Bookings</h1>
+  <p class="page-subtitle">System-wide booking history.</p>
+  <div class="card">
+    <div class="card-title">All Bookings (${DB.bookings.length})</div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>ID</th><th>Flight</th><th>Customer</th><th>Date</th><th>Class</th><th>Seats</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>
+          ${[...DB.bookings].reverse().map(b=>{
+            const f=DB.flights.find(x=>x.flightId===b.flightId)||{};
+            const u=DB.users.find(x=>x.userId===b.userId)||{};
+            return `<tr>
+              <td><b>#${b.bookingId}</b></td>
+              <td>${f.origin||'?'} → ${f.destination||'?'}</td>
+              <td>${u.userName||'?'} (#${b.userId})</td>
+              <td>${b.dateOfTravel}</td>
+              <td>${b.seatCategory}</td>
+              <td>${b.noOfSeats}</td>
+              <td>&#8377;${b.bookingAmount}</td>
+              <td>${b.bookingStatus}</td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="8" class="table-empty">No bookings</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ── Init ── */
+function init() {
+  if (!guardAdmin()) return;
+  document.getElementById('admin-name').textContent = DB.session.name;
+  showSection('dashboard');
+}
+
+init();
+</script>
+</body>
+</html>
